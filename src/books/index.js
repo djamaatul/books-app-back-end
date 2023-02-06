@@ -74,7 +74,8 @@ exports.addBook = async (request, h) => {
 
 		if (valid.key) {
 			return response(h, {
-				message: `type ${valid.key} harus dengan ${valid.type}`
+				message: `type ${valid.key} harus dengan ${valid.type}`,
+				status: 'fail',
 			},400)
 		}
 
@@ -169,7 +170,8 @@ exports.editBook = async (request, h) => {
 
 		if (valid.key) {
 			return response(h, {
-				message: `type ${valid.key} harus dengan ${valid.type}`
+				message: `type ${valid.key} harus dengan ${valid.type}`,
+				status: 'fail',
 			},400)
 		}
 
@@ -177,7 +179,7 @@ exports.editBook = async (request, h) => {
 
 		const index = db.books.findIndex((n) => n.id === id)
 
-		if (index < 0) throw new ErrorResponse("Gagal memperbarui buku. Id tidak ditemukan")
+		if (index < 0) throw new ErrorResponse("Gagal memperbarui buku. Id tidak ditemukan",404)
 
 		const updatedAt = new Date().toISOString()
 
