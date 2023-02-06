@@ -15,6 +15,24 @@ function required(r, keys) {
 	})
 }
 
+function validation(type, req, cb) {
+	return new Promise((res, rej) => {
+		Object.entries(type).forEach(([key, value]) => {
+			if (typeof req.payload[key] === value) {
+				return res({
+					status: 'valid'
+				})
+			} else {
+				return res({
+					key,
+					value: req.payload[key],
+					type: value
+				})
+			}
+		})
+	})
+}
+
 function next(h, error) {
 	const response = h.response({
 		status: 'fail',
@@ -26,22 +44,39 @@ function next(h, error) {
 	return response
 }
 
-function response(h, data) {
+function response(h, data, code = 200) {
 	const response = h.response({
 		status: 'success',
 		...data,
 	})
 
-	response.code(200)
+	response.code(code)
 
 	return response
 }
 
-exports.addBook = (request, h) => {
+exports.addBook = async (request, h) => {
 	try {
 		const { pageCount, readPage, name, year, author, summary, publisher, reading } = request.payload
 
 		required(request, ["name", "year", "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+
+		const valid = await validation({
+			"name": 'string',
+			"year": 'number',
+			"author": 'string',
+			"summary": 'string',
+			"publisher": 'string',
+			"pageCount": 'number',
+			"readPage": 'number',
+			"reading": 'boolean'
+		}, request)
+
+		if (valid.key) {
+			return response(h, {
+				message: `type ${valid.key} harus dengan ${valid.type}`
+			},400)
+		}
 
 		const id = nanoid(16)
 		const finished = pageCount === readPage
@@ -70,7 +105,7 @@ exports.addBook = (request, h) => {
 			data: {
 				bookId: id
 			}
-		})
+		},201)
 	} catch (error) {
 		if (!error.code) return next(h, new ErrorResponse('Buku gagal ditambahkan', 500))
 		return next(h, error)
@@ -82,7 +117,11 @@ exports.getBooks = (request, h) => {
 
 		return response(h, {
 			data: {
-				books: db.books
+				books: db.books.map(({ id, name, publisher }) => ({
+					id,
+					name,
+					publisher,
+				}))
 			}
 		})
 	} catch (error) {
@@ -97,7 +136,7 @@ exports.getBook = (request, h) => {
 
 		const book = db.books.find(e => e.id === id)
 
-		if (!book) throw new ErrorResponse("Buku tidak ditemukan", 400)
+		if (!book) throw new ErrorResponse("Buku tidak ditemukan", 404)
 
 		return response(h, {
 			data: {
@@ -105,18 +144,34 @@ exports.getBook = (request, h) => {
 			}
 		})
 	} catch (error) {
-		console.log(error)
 		if (!error.code) return next(h, new ErrorResponse('gagal mendapatkan Book', 500))
 		return next(h, error)
 	}
 };
 
-exports.editBook = (request, h) => {
+exports.editBook = async (request, h) => {
 	try {
 		const { id } = request.params;
 		const { pageCount, readPage, name, year, author, summary, publisher, reading } = request.payload
 
 		required(request, ["name", "year", "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+
+		const valid = await validation({
+			"name": 'string',
+			"year": 'number',
+			"author": 'string',
+			"summary": 'string',
+			"publisher": 'string',
+			"pageCount": 'number',
+			"readPage": 'number',
+			"reading": 'boolean'
+		}, request)
+
+		if (valid.key) {
+			return response(h, {
+				message: `type ${valid.key} harus dengan ${valid.type}`
+			},400)
+		}
 
 		if (readPage > pageCount) throw new ErrorResponse('Gagal memperbarui buku. readPage tidak boleh lebih besar dari pageCount', 400)
 
@@ -151,7 +206,7 @@ exports.deleteBook = (request, h) => {
 
 		const index = db.books.findIndex((n) => n.id === id)
 
-		if (index < 0) throw new ErrorResponse("Buku gagal dihapus. Id tidak ditemukan")
+		if (index < 0) throw new ErrorResponse("Buku gagal dihapus. Id tidak ditemukan",404)
 
 		db.books.splice(index, 1)
 
