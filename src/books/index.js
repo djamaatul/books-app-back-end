@@ -11,7 +11,7 @@ class ErrorResponse extends Error {
 
 function required(r, keys) {
 	keys.forEach((key) => {
-		if (!r.payload[key] === undefined) throw new ErrorResponse(`Gagal menambahkan buku. Mohon isi ${key} buku`, 400)
+		if (!r.payload[key]) throw new ErrorResponse(`Gagal menambahkan buku. Mohon isi ${key} buku`, 400)
 	})
 }
 
