@@ -11,7 +11,8 @@ class ErrorResponse extends Error {
 
 function required(r, keys) {
 	keys.forEach((key) => {
-		if (!r.payload[key]) throw new ErrorResponse(`Gagal menambahkan buku. Mohon isi ${key} buku`, 400)
+		const isArray = Array.isArray(key)
+		if (isArray ? !r.payload[key[0]] : !r.payload[key]) throw new ErrorResponse(`Gagal menambahkan buku. Mohon isi ${isArray ? key[1] : key} buku`, 400)
 	})
 }
 
@@ -59,7 +60,9 @@ exports.addBook = async (request, h) => {
 	try {
 		const { pageCount, readPage, name, year, author, summary, publisher, reading } = request.payload
 
-		required(request, ["name", "year", "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+		if (readPage > pageCount) throw new ErrorResponse('Gagal menambahkan buku. readPage tidak boleh lebih besar dari pageCount', 400)
+
+		required(request, [["name", "nama"], ["year", "tahun"], "author", "summary", "publisher", "pageCount", "readPage", "reading"])
 
 		const valid = await validation({
 			"name": 'string',
@@ -76,7 +79,7 @@ exports.addBook = async (request, h) => {
 			return response(h, {
 				message: `type ${valid.key} harus dengan ${valid.type}`,
 				status: 'fail',
-			},400)
+			}, 400)
 		}
 
 		const id = nanoid(16)
@@ -84,7 +87,6 @@ exports.addBook = async (request, h) => {
 		const insertedAt = new Date().toISOString()
 		const updatedAt = new Date().toISOString()
 
-		if (readPage > pageCount) throw new ErrorResponse('Gagal menambahkan buku. readPage tidak boleh lebih besar dari pageCount', 400)
 
 		db.books.push({
 			id,
@@ -106,7 +108,7 @@ exports.addBook = async (request, h) => {
 			data: {
 				bookId: id
 			}
-		},201)
+		}, 201)
 	} catch (error) {
 		if (!error.code) return next(h, new ErrorResponse('Buku gagal ditambahkan', 500))
 		return next(h, error)
@@ -155,7 +157,9 @@ exports.editBook = async (request, h) => {
 		const { id } = request.params;
 		const { pageCount, readPage, name, year, author, summary, publisher, reading } = request.payload
 
-		required(request, ["name", "year", "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+		if (readPage > pageCount) throw new ErrorResponse('Gagal memperbarui buku. readPage tidak boleh lebih besar dari pageCount', 400)
+		
+		required(request, [["name", "name"], ["year", "tahun"], "author", "summary", "publisher", "pageCount", "readPage", "reading"])
 
 		const valid = await validation({
 			"name": 'string',
@@ -172,14 +176,13 @@ exports.editBook = async (request, h) => {
 			return response(h, {
 				message: `type ${valid.key} harus dengan ${valid.type}`,
 				status: 'fail',
-			},400)
+			}, 400)
 		}
 
-		if (readPage > pageCount) throw new ErrorResponse('Gagal memperbarui buku. readPage tidak boleh lebih besar dari pageCount', 400)
 
 		const index = db.books.findIndex((n) => n.id === id)
 
-		if (index < 0) throw new ErrorResponse("Gagal memperbarui buku. Id tidak ditemukan",404)
+		if (index < 0) throw new ErrorResponse("Gagal memperbarui buku. Id tidak ditemukan", 404)
 
 		const updatedAt = new Date().toISOString()
 
@@ -208,7 +211,7 @@ exports.deleteBook = (request, h) => {
 
 		const index = db.books.findIndex((n) => n.id === id)
 
-		if (index < 0) throw new ErrorResponse("Buku gagal dihapus. Id tidak ditemukan",404)
+		if (index < 0) throw new ErrorResponse("Buku gagal dihapus. Id tidak ditemukan", 404)
 
 		db.books.splice(index, 1)
 
