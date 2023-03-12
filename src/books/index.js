@@ -9,23 +9,35 @@ class ErrorResponse extends Error {
 	}
 }
 
-function required(r, keys) {
-	keys.forEach((key) => {
-		const isArray = Array.isArray(key)
-		if (isArray ? !r.payload[key[0]] : !r.payload[key]) throw new ErrorResponse(`Gagal menambahkan buku. Mohon isi ${isArray ? key[1] : key} buku`, 400)
+function required(r, keys, replacement) {
+	return new Promise((res, rej) => {
+		keys.forEach((key) => {
+			const isArray = Array.isArray(key)
+			const isKey = (key) => ({
+				[key]: key,
+				...replacement
+			}[key])
+
+			if ((isArray ? r.payload[key[0]] : r.payload[key]) === undefined) return rej(isArray ? isKey(key[1]) : isKey(key))
+			return res()
+		})
 	})
 }
 
-function validation(type, req, cb) {
+function validation(type, req, replacement = {}) {
 	return new Promise((res, rej) => {
 		Object.entries(type).forEach(([key, value]) => {
+			const isKey = {
+				[key]: key,
+				...replacement
+			}
 			if (typeof req.payload[key] === value) {
 				return res({
 					status: 'valid'
 				})
 			} else {
 				return res({
-					key,
+					key: isKey[key],
 					value: req.payload[key],
 					type: value
 				})
@@ -62,7 +74,11 @@ exports.addBook = async (request, h) => {
 
 		if (readPage > pageCount) throw new ErrorResponse('Gagal menambahkan buku. readPage tidak boleh lebih besar dari pageCount', 400)
 
-		required(request, [["name", "nama"], ["year", "tahun"], "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+		try {
+			await required(request, [["name", "nama"], ["year", "tahun"], "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+		} catch (error) {
+			throw new ErrorResponse(`Gagal menambahkan buku. Mohon isi ${error} buku`, 400)
+		}
 
 		const valid = await validation({
 			"name": 'string',
@@ -73,7 +89,10 @@ exports.addBook = async (request, h) => {
 			"pageCount": 'number',
 			"readPage": 'number',
 			"reading": 'boolean'
-		}, request)
+		}, request, {
+			"name": "nama",
+			"year": "tahun"
+		})
 
 		if (valid.key) {
 			return response(h, {
@@ -117,10 +136,25 @@ exports.addBook = async (request, h) => {
 
 exports.getBooks = (request, h) => {
 	try {
-
+		const query = request.query
 		return response(h, {
 			data: {
-				books: db.books.map(({ id, name, publisher }) => ({
+				books: db.books.filter(book=>{
+					if(query){
+						let condition = true
+						if(query.reading >= 0){
+							condition = condition && book.reading === !!query.reading
+						}
+						if(+query.finished >= 0){
+							condition = condition && book.finished === !!+query.finished
+						}
+						if(query.name){
+							condition = condition && book.name?.toLowerCase?.()?.includes(query.name?.toLowerCase?.())
+						}
+						return condition
+					}
+					return true
+				}).map(({ id, name, publisher }) => ({
 					id,
 					name,
 					publisher,
@@ -128,7 +162,7 @@ exports.getBooks = (request, h) => {
 			}
 		})
 	} catch (error) {
-		if (!error.code) return next(h, new ErrorResponse('gagal mendapatkan Book', 500))
+		if (!error.code) return next(h, new ErrorResponse('gagal mendapatkan buku', 500))
 		return next(h, error)
 	}
 };
@@ -158,8 +192,15 @@ exports.editBook = async (request, h) => {
 		const { pageCount, readPage, name, year, author, summary, publisher, reading } = request.payload
 
 		if (readPage > pageCount) throw new ErrorResponse('Gagal memperbarui buku. readPage tidak boleh lebih besar dari pageCount', 400)
-		
-		required(request, [["name", "name"], ["year", "tahun"], "author", "summary", "publisher", "pageCount", "readPage", "reading"])
+
+		try {
+			await required(request, [["name", "name"], ["year", "tahun"], "author", "summary", "publisher", "pageCount", "readPage", "reading"], {
+				"name": "nama",
+				"year": "tahun"
+			})
+		} catch (error) {
+			throw new ErrorResponse(`Gagal memperbarui buku. Mohon isi ${error} buku`, 400)
+		}
 
 		const valid = await validation({
 			"name": 'string',
@@ -170,7 +211,10 @@ exports.editBook = async (request, h) => {
 			"pageCount": 'number',
 			"readPage": 'number',
 			"reading": 'boolean'
-		}, request)
+		}, request, {
+			"name": "nama",
+			"year": "tahun"
+		})
 
 		if (valid.key) {
 			return response(h, {
@@ -199,7 +243,6 @@ exports.editBook = async (request, h) => {
 		})
 
 	} catch (error) {
-		console.log(error.code)
 		if (!error.code) return next(h, new ErrorResponse('Buku gagal diubah', 500))
 		return next(h, error)
 	}
